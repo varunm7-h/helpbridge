@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HelpBridge — Live Disaster Map</title>
+<link rel="preconnect" href="https://unpkg.com">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root{
+  --bg:#07111f; --panel:#0d1b2a; --panel2:#12243a; --text:#f4f7fb;
+  --muted:#9db0c5; --accent:#28c7a7; --danger:#ff5364; --warn:#ffb547;
+  --blue:#55a7ff; --line:rgba(255,255,255,.09);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif}
+header{height:68px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;border-bottom:1px solid var(--line);background:rgba(7,17,31,.96);position:relative;z-index:1000}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:19px;letter-spacing:.2px}
+.logo{width:34px;height:34px;border-radius:11px;background:linear-gradient(135deg,#24d1ad,#238bff);display:grid;place-items:center}
+nav{display:flex;gap:8px}
+nav button,.topbtn{background:transparent;color:var(--muted);border:0;padding:10px 12px;border-radius:9px;cursor:pointer}
+nav button:hover,.topbtn:hover{background:var(--panel2);color:white}
+.layout{height:calc(100vh - 68px);display:grid;grid-template-columns:360px 1fr}
+.sidebar{background:var(--panel);border-right:1px solid var(--line);overflow:auto;padding:18px}
+h1{font-size:24px;margin:4px 0 8px}
+.sub{color:var(--muted);font-size:13px;line-height:1.5;margin-bottom:18px}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:16px}
+.stat{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px}
+.stat b{display:block;font-size:21px;margin-bottom:2px}.stat span{color:var(--muted);font-size:11px}
+.filters{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px}
+.filter{border:1px solid var(--line);background:#102136;color:#c8d5e3;padding:7px 9px;border-radius:999px;font-size:11px;cursor:pointer}
+.filter.active{background:#163f48;border-color:#287f78;color:#8ff0db}
+.primary{width:100%;border:0;background:var(--accent);color:#041410;font-weight:800;padding:13px;border-radius:11px;cursor:pointer;margin-bottom:15px}
+.report{background:var(--panel2);border:1px solid var(--line);border-radius:13px;padding:13px;margin-bottom:10px;cursor:pointer}
+.report:hover{border-color:#31516e}
+.row{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.badge{font-size:10px;padding:4px 7px;border-radius:999px;font-weight:700}
+.red{background:rgba(255,83,100,.14);color:#ff8490}.orange{background:rgba(255,181,71,.14);color:#ffc66e}
+.green{background:rgba(40,199,167,.14);color:#75e2cc}.blue{background:rgba(85,167,255,.14);color:#8dc4ff}
+.report h3{font-size:13px;margin:0 0 5px}.report p{margin:3px 0;color:#aebed0;font-size:11px;line-height:1.4}
+.time{color:#70869d!important;font-size:10px!important;margin-top:8px!important}
+#map{width:100%;height:100%;background:#0a1725}
+.leaflet-control-zoom a{background:#0d1b2a!important;color:white!important;border-color:#263b52!important}
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#0d1b2a;color:#eef5fc}
+.leaflet-popup-content{margin:13px;min-width:205px}
+.popup-title{font-weight:800;margin-bottom:6px}.popup-meta{font-size:12px;color:#aebed0;line-height:1.5}
+.popup-action{margin-top:10px;width:100%;border:0;background:#28c7a7;padding:8px;border-radius:8px;font-weight:800;cursor:pointer}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.68);display:none;align-items:center;justify-content:center;z-index:3000;padding:20px}
+.modal.show{display:flex}
+.card{width:min(520px,100%);background:#0d1b2a;border:1px solid #263b52;border-radius:16px;padding:20px;box-shadow:0 25px 70px #0008}
+.card h2{margin:0 0 5px}.card .muted{color:var(--muted);font-size:12px;margin-bottom:16px}
+label{display:block;color:#b8c8d9;font-size:12px;margin:12px 0 6px}
+select,input,textarea{width:100%;background:#081624;color:white;border:1px solid #263b52;border-radius:9px;padding:10px;outline:none}
+textarea{min-height:90px;resize:vertical}
+.actions{display:flex;gap:8px;margin-top:16px}.actions button{flex:1;padding:11px;border-radius:9px;border:1px solid var(--line);cursor:pointer;font-weight:700}
+.cancel{background:#132337;color:#d9e5f0}.send{background:var(--accent);color:#041410;border:0!important}
+.notice{font-size:10px;color:#8298ad;line-height:1.45;margin-top:12px}
+.locate{position:absolute;right:18px;top:82px;z-index:800;background:#0d1b2a;color:white;border:1px solid #263b52;padding:9px 11px;border-radius:9px;cursor:pointer}
+.legend{position:absolute;right:18px;bottom:20px;z-index:800;background:rgba(13,27,42,.94);border:1px solid #263b52;border-radius:10px;padding:10px 12px;font-size:11px;line-height:1.8}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+@media(max-width:850px){
+ .layout{grid-template-columns:1fr;height:auto}.sidebar{height:auto;max-height:52vh;border-right:0;border-bottom:1px solid var(--line)}
+ #map{height:58vh}.legend{bottom:12px}.locate{top:10px}
+ nav{display:none}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><div class="logo">🌊</div> HELPBRIDGE</div>
+  <nav><button>Live Map</button><button>Stories</button><button>About</button></nav>
+  <button class="topbtn" onclick="openModal()">+ Report</button>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <h1>Live situation</h1>
+    <div class="sub">A community map of urgent needs, hazards and places offering help. Sample reports are shown for this prototype.</div>
+
+    <div class="stats">
+      <div class="stat"><b id="needCount">4</b><span>Active needs</span></div>
+      <div class="stat"><b id="hazardCount">3</b><span>Hazards</span></div>
+      <div class="stat"><b>2</b><span>Help in progress</span></div>
+      <div class="stat"><b>1</b><span>Relief point</span></div>
+    </div>
+
+    <button class="primary" onclick="openModal()">🆘 Report a situation</button>
+
+    <div class="filters">
+      <button class="filter active" data-filter="all">All</button>
+      <button class="filter" data-filter="need">Needs</button>
+      <button class="filter" data-filter="hazard">Hazards</button>
+      <button class="filter" data-filter="resource">Help points</button>
+    </div>
+
+    <div id="reports"></div>
+  </aside>
+
+  <main style="position:relative">
+    <button class="locate" onclick="locateMe()">📍 My location</button>
+    <div id="map"></div>
+    <div class="legend">
+      <div><span class="dot" style="background:#ff5364"></span>Urgent / danger</div>
+      <div><span class="dot" style="background:#ffb547"></span>Needs attention</div>
+      <div><span class="dot" style="background:#28c7a7"></span>Help / resource</div>
+      <div><span class="dot" style="background:#55a7ff"></span>Information</div>
+    </div>
+  </main>
+</div>
+
+<div class="modal" id="modal">
+  <div class="card">
+    <h2>Report a situation</h2>
+    <div class="muted">Share only information you are comfortable making visible. Do not approach dangerous wires or floodwater.</div>
+    <label>Report type</label>
+    <select id="type">
+      <option value="need">🍚 Food needed</option>
+      <option value="need">💧 Water needed</option>
+      <option value="need">💊 Medicine needed</option>
+      <option value="need">🚑 Rescue needed</option>
+      <option value="hazard">⚡ Electrical hazard</option>
+      <option value="hazard">🌳 Fallen tree</option>
+      <option value="hazard">🛣️ Road blocked</option>
+      <option value="hazard">🌊 Flooded area</option>
+      <option value="resource">🏕️ Relief / help point</option>
+    </select>
+    <label>Area / location</label>
+    <input id="area" placeholder="Example: Jubilee Hills, Hyderabad">
+    <label>What is happening?</label>
+    <textarea id="desc" placeholder="Briefly describe the situation..."></textarea>
+    <label>Approximate people affected (optional)</label>
+    <input id="people" type="number" min="0" placeholder="Example: 8">
+    <div class="actions">
+      <button class="cancel" onclick="closeModal()">Cancel</button>
+      <button class="send" onclick="submitReport()">Submit report</button>
+    </div>
+    <div class="notice">Prototype note: reports are currently stored only in this browser. Real deployment will add a secure database, moderation and verification.</div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const map = L.map('map').setView([17.385,78.4867], 11);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  maxZoom:19, attribution:'© OpenStreetMap contributors'
+}).addTo(map);
+
+let reports = [
+ {id:1,type:'need',title:'🍚 Food needed',area:'Hyderabad — sample area',lat:17.415,lng:78.465,status:'URGENT',people:14,desc:'Families need ready-to-eat food and drinking water.'},
+ {id:2,type:'hazard',title:'⚡ Electrical hazard',area:'Hyderabad — sample area',lat:17.37,lng:78.50,status:'DANGER',people:0,desc:'Reported downed electrical line. Keep away and contact the utility/emergency authority.'},
+ {id:3,type:'hazard',title:'🛣️ Road blocked',area:'Hyderabad — sample area',lat:17.395,lng:78.535,status:'ATTENTION',people:0,desc:'Road reportedly blocked by debris.'},
+ {id:4,type:'need',title:'💧 Water needed',area:'Hyderabad — sample area',lat:17.34,lng:78.47,status:'URGENT',people:9,desc:'Drinking water requested by affected residents.'},
+ {id:5,type:'hazard',title:'🌳 Fallen tree',area:'Hyderabad — sample area',lat:17.425,lng:78.52,status:'ATTENTION',people:0,desc:'Tree reported across a local road.'},
+ {id:6,type:'resource',title:'🏕️ Community relief point',area:'Hyderabad — sample area',lat:17.36,lng:78.455,status:'HELP',people:0,desc:'Sample relief point. Verify opening hours before travelling.'}
+];
+
+const markers = {};
+const colors={need:'#ff5364',hazard:'#ffb547',resource:'#28c7a7'};
+function markerIcon(type){
+ return L.divIcon({className:'custom-marker',html:`<div style="width:18px;height:18px;border-radius:50%;background:${colors[type]};border:3px solid #fff;box-shadow:0 0 0 4px ${colors[type]}44"></div>`,iconSize:[18,18],iconAnchor:[9,9]});
+}
+function render(){
+ Object.values(markers).forEach(m=>map.removeLayer(m));
+ const active=document.querySelector('.filter.active').dataset.filter;
+ const visible=reports.filter(r=>active==='all'||r.type===active);
+ document.getElementById('reports').innerHTML=visible.map(r=>`
+  <div class="report" onclick="focusReport(${r.id})">
+   <div class="row"><h3>${r.title}</h3><span class="badge ${r.type==='hazard'?'orange':r.type==='resource'?'green':'red'}">${r.status}</span></div>
+   <p>📍 ${r.area}</p><p>${r.people?`👥 ${r.people} people affected`:r.desc}</p>
+   <p class="time">Reported recently · ${r.type==='hazard'?'Verify before treating as confirmed':''}</p>
+  </div>`).join('');
+ visible.forEach(r=>{
+   const m=L.marker([r.lat,r.lng],{icon:markerIcon(r.type)}).addTo(map);
+   m.bindPopup(`<div class="popup-title">${r.title}</div><div class="popup-meta">📍 ${r.area}<br>${r.people?`👥 ${r.people} people<br>`:''}${r.desc}<br><br><b>Status:</b> ${r.status}</div>${r.type==='need'?'<button class="popup-action" onclick="alert(\\'Help flow will be connected to volunteers in the next version.\\')">I CAN HELP</button>':''}`);
+   markers[r.id]=m;
+ });
+ document.getElementById('needCount').textContent=reports.filter(r=>r.type==='need').length;
+ document.getElementById('hazardCount').textContent=reports.filter(r=>r.type==='hazard').length;
+}
+function focusReport(id){const r=reports.find(x=>x.id===id);map.setView([r.lat,r.lng],14);markers[id]?.openPopup()}
+function openModal(){document.getElementById('modal').classList.add('show')}
+function closeModal(){document.getElementById('modal').classList.remove('show')}
+function submitReport(){
+ const title=document.getElementById('type').selectedOptions[0].text;
+ const type=document.getElementById('type').value;
+ const area=document.getElementById('area').value.trim()||'User-reported area';
+ const desc=document.getElementById('desc').value.trim()||'No description provided.';
+ const people=Number(document.getElementById('people').value)||0;
+ const center=map.getCenter();
+ reports.unshift({id:Date.now(),type,title,area,lat:center.lat,lng:center.lng,status:type==='hazard'?'UNVERIFIED':'URGENT',people,desc});
+ closeModal(); render();
+ alert('Report added to this prototype. In the real version, location, photo evidence, moderation and verification will be handled securely.');
+}
+function locateMe(){
+ if(!navigator.geolocation){alert('Location is not supported by this browser.');return}
+ navigator.geolocation.getCurrentPosition(pos=>map.setView([pos.coords.latitude,pos.coords.longitude],15),()=>alert('Location permission was not granted.'));
+}
+document.querySelectorAll('.filter').forEach(b=>b.addEventListener('click',()=>{
+ document.querySelectorAll('.filter').forEach(x=>x.classList.remove('active'));b.classList.add('active');render();
+}));
+render();
+</script>
+</body>
+</html>
